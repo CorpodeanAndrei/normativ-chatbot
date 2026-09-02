@@ -3,7 +3,7 @@
 
   // ====================== CONFIGURARE ======================
   // 1. Pune aici URL-ul Apps Script-ului tău (Deploy > Web app > copiază URL-ul cu /exec)
-  var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVrQiYkWFTV1qiua8_miaZeFYF2xsqeslw1DRwJf06sVmBRbWCumdeKK1wnS51pltP/exec';
+  var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7zOEbvoPe1h3n0HxvgMnYQTf6YGIRccUJbFdkw8jf6eitzFwAXIX9jhC1frEk30kt/exec';
   // 2. Pune aici folderul unde ai urcat pe Hostinger fișierele "data/" (chunks + figuri)
   var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/data';
   // ===========================================================
