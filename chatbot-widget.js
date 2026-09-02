@@ -5,7 +5,7 @@
   // 1. Pune aici URL-ul Apps Script-ului tău (Deploy > Web app > copiază URL-ul cu /exec)
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVrQiYkWFTV1qiua8_miaZeFYF2xsqeslw1DRwJf06sVmBRbWCumdeKK1wnS51pltP/exec';
   // 2. Pune aici folderul unde ai urcat pe Hostinger fișierele "data/" (chunks + figuri)
-  var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/';
+  var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/data';
   // ===========================================================
 
   var STOPWORDS = ('sa se si la in cu de pe din care este sunt un o al a ai le lor pentru mai daca fi nu ca ' +
