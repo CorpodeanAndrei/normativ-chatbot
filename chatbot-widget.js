@@ -6,13 +6,28 @@
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVrQiYkWFTV1qiua8_miaZeFYF2xsqeslw1DRwJf06sVmBRbWCumdeKK1wnS51pltP/exec';
   // 2. Pune aici folderul unde ai urcat pe Hostinger fișierele "data/" (chunks + figuri)
   var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/';
-  // ===========================================================
 
   var STOPWORDS = ('sa se si la in cu de pe din care este sunt un o al a ai le lor pentru mai daca fi nu ca ' +
     'sau ori pana catre spre fara dar insa deci apoi acest aceasta acesta acele acei asta atat').split(' ');
 
   var state = { chunks: null, loading: false, figuresIndex: null, open: false, history: [] };
   var MAX_HISTORY_TURNS = 3; // câte schimburi anterioare ținem minte
+
+  // Unele site-uri (builder-e no-code) randează elementul "Embed code" într-un
+  // iframe izolat. Dacă e cazul, "position: fixed" rămâne prins în acel iframe
+  // mic, în loc de tot ecranul. Încercăm să atașăm widget-ul direct la pagina
+  // principală (window.top), care funcționează dacă iframe-ul e pe același
+  // domeniu; altfel, cădem înapoi pe documentul curent.
+  var doc = document;
+  try {
+    if (window.top && window.top !== window && window.top.document) {
+      // testăm accesul (aruncă eroare dacă e cross-origin)
+      void window.top.document.body;
+      doc = window.top.document;
+    }
+  } catch (e) {
+    doc = document;
+  }
 
   function stripAccents(s) {
     s = s.toLowerCase();
@@ -150,17 +165,17 @@
     '.niw-close{background:none;border:none;color:#f6f4ef;font-size:18px;cursor:pointer;position:absolute;' +
     'top:12px;right:12px;line-height:1;}';
 
-  var styleTag = document.createElement('style');
+  var styleTag = doc.createElement('style');
   styleTag.textContent = css;
-  document.head.appendChild(styleTag);
+  doc.head.appendChild(styleTag);
 
-  var bubble = document.createElement('button');
+  var bubble = doc.createElement('button');
   bubble.className = 'niw-bubble';
   bubble.setAttribute('aria-label', 'Deschide asistentul normativ I7');
   bubble.textContent = '⚡';
-  document.body.appendChild(bubble);
+  doc.body.appendChild(bubble);
 
-  var panel = document.createElement('div');
+  var panel = doc.createElement('div');
   panel.className = 'niw-panel';
   panel.style.display = 'none';
   panel.innerHTML =
@@ -174,7 +189,7 @@
     '<input type="text" id="niw-input" placeholder="Ex: la ce înălțime se montează un întrerupător?" />' +
     '<button id="niw-send">Trimite</button>' +
     '</div>';
-  document.body.appendChild(panel);
+  doc.body.appendChild(panel);
 
   var bodyEl = panel.querySelector('#niw-body');
   var inputEl = panel.querySelector('#niw-input');
