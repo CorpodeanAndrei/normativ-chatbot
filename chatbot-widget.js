@@ -6,6 +6,7 @@
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVrQiYkWFTV1qiua8_miaZeFYF2xsqeslw1DRwJf06sVmBRbWCumdeKK1wnS51pltP/exec';
   // 2. Pune aici folderul unde ai urcat pe Hostinger fișierele "data/" (chunks + figuri)
   var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/data';
+  // ===========================================================
 
   var STOPWORDS = ('sa se si la in cu de pe din care este sunt un o al a ai le lor pentru mai daca fi nu ca ' +
     'sau ori pana catre spre fara dar insa deci apoi acest aceasta acesta acele acei asta atat').split(' ');
@@ -197,7 +198,7 @@
   var closeBtn = panel.querySelector('.niw-close');
 
   function addMessage(role, text) {
-    var div = document.createElement('div');
+    var div = doc.createElement('div');
     div.className = 'niw-msg ' + role;
     div.textContent = text;
     bodyEl.appendChild(div);
@@ -208,7 +209,7 @@
   function addBotAnswer(answer) {
     var figureNums = extractFigureTokens(answer);
     var clean = stripFigureTokens(answer);
-    var div = document.createElement('div');
+    var div = doc.createElement('div');
     div.className = 'niw-msg bot';
     div.textContent = clean;
     bodyEl.appendChild(div);
@@ -216,12 +217,12 @@
     figureNums.forEach(function (num) {
       var file = state.figuresIndex[num];
       if (!file) return;
-      var img = document.createElement('img');
+      var img = doc.createElement('img');
       img.className = 'niw-fig';
       img.src = DATA_BASE_URL + '/figures/' + file;
       img.alt = 'Fig. ' + num;
       div.appendChild(img);
-      var cap = document.createElement('div');
+      var cap = doc.createElement('div');
       cap.className = 'niw-figcap';
       cap.textContent = 'Fig. ' + num + ' (normativ I7-2011)';
       div.appendChild(cap);
@@ -235,7 +236,7 @@
     inputEl.disabled = isLoading;
     var existing = bodyEl.querySelector('.niw-typing');
     if (isLoading && !existing) {
-      var t = document.createElement('div');
+      var t = doc.createElement('div');
       t.className = 'niw-typing';
       t.textContent = 'Caut în normativ…';
       bodyEl.appendChild(t);
@@ -252,7 +253,9 @@
     inputEl.value = '';
     setLoading(true);
 
-    ensureData().then(function () {
+    ensureData().catch(function () {
+      throw { stage: 'data' };
+    }).then(function () {
       // Pentru căutare, folosim și ultima întrebare a utilizatorului (dacă există),
       // ca să prindem și întrebările de follow-up de tipul "dar de X?"
       var lastQ = state.history.length ? state.history[state.history.length - 1].question : '';
@@ -266,7 +269,7 @@
       return fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         body: JSON.stringify({ question: question, context: context, history: historyText })
-      });
+      }).catch(function () { throw { stage: 'backend' }; });
     }).then(function (r) { return r.json(); })
       .then(function (data) {
         setLoading(false);
@@ -282,7 +285,13 @@
       })
       .catch(function (err) {
         setLoading(false);
-        addMessage('bot', 'Nu am putut contacta serverul. Verifică conexiunea și încearcă din nou.');
+        if (err && err.stage === 'data') {
+          addMessage('bot', 'Nu am putut încărca datele normativului (verifică DATA_BASE_URL / folderul "data" de pe server).');
+        } else if (err && err.stage === 'backend') {
+          addMessage('bot', 'Nu am putut contacta backend-ul (Apps Script). Verifică APPS_SCRIPT_URL și deployment-ul.');
+        } else {
+          addMessage('bot', 'A apărut o eroare neașteptată: ' + (err && err.message ? err.message : 'necunoscută'));
+        }
       });
   }
 
