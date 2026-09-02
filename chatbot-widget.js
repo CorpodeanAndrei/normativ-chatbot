@@ -5,13 +5,14 @@
   // 1. Pune aici URL-ul Apps Script-ului tău (Deploy > Web app > copiază URL-ul cu /exec)
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwVrQiYkWFTV1qiua8_miaZeFYF2xsqeslw1DRwJf06sVmBRbWCumdeKK1wnS51pltP/exec';
   // 2. Pune aici folderul unde ai urcat pe Hostinger fișierele "data/" (chunks + figuri)
-  var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/data';
+  var DATA_BASE_URL = 'https://corpodeanandrei.github.io/normativ-chatbot/';
   // ===========================================================
 
   var STOPWORDS = ('sa se si la in cu de pe din care este sunt un o al a ai le lor pentru mai daca fi nu ca ' +
-    'sau ori pana catre spre fara').split(' ');
+    'sau ori pana catre spre fara dar insa deci apoi acest aceasta acesta acele acei asta atat').split(' ');
 
-  var state = { chunks: null, loading: false, figuresIndex: null, open: false };
+  var state = { chunks: null, loading: false, figuresIndex: null, open: false, history: [] };
+  var MAX_HISTORY_TURNS = 3; // câte schimburi anterioare ținem minte
 
   function stripAccents(s) {
     s = s.toLowerCase();
@@ -19,15 +20,33 @@
     return s.replace(/[ăâîșşțţ]/g, function (c) { return map[c]; });
   }
 
+  // Coduri tehnice scurte (2-3 litere) care NU trebuie filtrate ca fiind
+  // "prea comune", chiar dacă sunt scurte — sunt esențiale în normativ.
+  var TECH_WHITELIST = ['tn', 'tt', 'it', 'pe', 'pen', 'ddr', 'rcd', 'sr', 'hd'];
+
   function tokenize(str) {
     var s = stripAccents(str);
     var nums = {};
     var numMatches = s.replace(/,/g, '.').match(/\d+\.\d+|\d+/g) || [];
     numMatches.forEach(function (n) { nums[n] = true; });
+
+    // Coduri tehnice: secvențe de litere/cifre unite prin cratimă (ex: TN-C-S, TN-S)
+    // — le păstrăm ca literă unită ("tncs") ȘI ca literă originală fără cratimă unită.
+    var techCodes = {};
+    var techMatches = s.match(/\b[a-z]{1,4}(?:-[a-z0-9]{1,4}){1,3}\b/g) || [];
+    techMatches.forEach(function (t) {
+      techCodes[t] = true;
+      techCodes[t.replace(/-/g, '')] = true;
+    });
+
     var words = (s.match(/[a-z]+/g) || [])
-      .filter(function (w) { return w.length > 2 && STOPWORDS.indexOf(w) === -1; })
-      .map(function (w) { return w.slice(0, 5); });
-    return { nums: nums, words: words };
+      .filter(function (w) {
+        if (TECH_WHITELIST.indexOf(w) !== -1) return true;
+        return w.length > 2 && STOPWORDS.indexOf(w) === -1;
+      })
+      .map(function (w) { return w.length <= 4 ? w : w.slice(0, 5); });
+
+    return { nums: nums, words: words, techCodes: techCodes };
   }
 
   function ensureData() {
@@ -42,6 +61,7 @@
       state.chunks.forEach(function (c) {
         var t = tokenize(c.text);
         c._nums = t.nums;
+        c._techCodes = t.techCodes;
         c._wordSet = {};
         t.words.forEach(function (w) { c._wordSet[w] = true; });
       });
@@ -49,18 +69,36 @@
     return state.loading;
   }
 
+  // Dacă întrebarea cere explicit o figură/schemă/imagine (fără alt termen
+  // tehnic clar), preferăm fragmente care chiar conțin o mențiune "Fig."
+  var FIGURE_REQUEST_WORDS = ['poza', 'poze', 'imagine', 'imagini', 'figura', 'figuri',
+    'schema', 'scheme', 'schita', 'desen', 'desene', 'atasa', 'ataseze'];
+
   function search(query, topN) {
     var q = tokenize(query);
     var scored = [];
+    var wantsFigure = false;
+    var qStr = stripAccents(query);
+    FIGURE_REQUEST_WORDS.forEach(function (w) { if (qStr.indexOf(w) !== -1) wantsFigure = true; });
+
     for (var i = 0; i < state.chunks.length; i++) {
       var c = state.chunks[i];
       var score = 0;
       q.words.forEach(function (w) { if (c._wordSet[w]) score += 1; });
       Object.keys(q.nums).forEach(function (n) { if (c._nums[n]) score += 3; });
+      Object.keys(q.techCodes).forEach(function (t) { if (c._techCodes[t]) score += 8; });
+      if (wantsFigure && /Fig\.\s*\d/.test(c.text)) score += 2;
       if (score > 0) scored.push({ score: score, chunk: c });
     }
     scored.sort(function (a, b) { return b.score - a.score; });
-    return scored.slice(0, topN || 8).map(function (s) { return s.chunk; });
+    var result = scored.slice(0, topN || 8).map(function (s) { return s.chunk; });
+
+    // Fallback: dacă întrebarea e generică despre o figură și nu s-a găsit
+    // nimic prin scor, alegem direct câteva fragmente care conțin figuri.
+    if (wantsFigure && result.length === 0) {
+      result = state.chunks.filter(function (c) { return /Fig\.\s*\d/.test(c.text); }).slice(0, 5);
+    }
+    return result;
   }
 
   function buildContext(chunks) {
@@ -200,11 +238,19 @@
     setLoading(true);
 
     ensureData().then(function () {
-      var relevant = search(question, 8);
+      // Pentru căutare, folosim și ultima întrebare a utilizatorului (dacă există),
+      // ca să prindem și întrebările de follow-up de tipul "dar de X?"
+      var lastQ = state.history.length ? state.history[state.history.length - 1].question : '';
+      var searchQuery = lastQ ? (lastQ + ' ' + question) : question;
+      var relevant = search(searchQuery, 8);
       var context = buildContext(relevant);
+      var historyText = state.history.map(function (h) {
+        return 'Utilizator: ' + h.question + '\nAsistent: ' + h.answer;
+      }).join('\n\n');
+
       return fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        body: JSON.stringify({ question: question, context: context })
+        body: JSON.stringify({ question: question, context: context, history: historyText })
       });
     }).then(function (r) { return r.json(); })
       .then(function (data) {
@@ -216,6 +262,8 @@
           return;
         }
         addBotAnswer(data.answer);
+        state.history.push({ question: question, answer: stripFigureTokens(data.answer) });
+        if (state.history.length > MAX_HISTORY_TURNS) state.history.shift();
       })
       .catch(function (err) {
         setLoading(false);
